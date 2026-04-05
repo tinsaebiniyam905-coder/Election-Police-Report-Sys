@@ -5,34 +5,27 @@
 <title>የፖሊስ ሪፖርት ሲስተም</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-<!-- PWA (Mobile App Like) -->
-<link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#1f4037">
+<!-- FIX: removed manifest (404 error) -->
 
 <!-- LIBRARIES -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
 <style>
 body{margin:0;font-family:'Segoe UI';background:linear-gradient(135deg,#1f4037,#99f2c8);} 
 .container{max-width:1100px;margin:auto;padding:20px;} 
 .card{background:white;border-radius:15px;padding:20px;margin-top:20px;box-shadow:0 10px 25px rgba(0,0,0,0.2);} 
-input,textarea{width:100%;padding:10px;margin:6px 0;border-radius:8px;border:1px solid #ccc;} 
+input{width:100%;padding:10px;margin:6px 0;border-radius:8px;border:1px solid #ccc;} 
 button{background:#28a745;color:white;padding:10px;border:none;border-radius:8px;cursor:pointer;} 
-button:hover{background:#218838;} 
 .hidden{display:none;} 
 .report-item{background:#f1f1f1;margin:10px 0;padding:10px;border-radius:10px;cursor:pointer;} 
 #map{height:300px;margin-top:10px;border-radius:10px;} 
-.popup{position:fixed;top:20px;right:20px;background:#ff4444;color:white;padding:15px;border-radius:10px;display:none;} 
 </style>
 </head>
 
 <body>
-<div class="popup" id="popup">🔔 አዲስ ሪፖርት!</div>
-
 <div class="container">
 <h2>🇪🇹 የፖሊስ ሪፖርት ሲስተም</h2>
 <h4 style="color:gold;font-weight:bold;">ቤንሻንጉል ጉምዝ ክልል ፖሊስ ኮሚሽን</h4>
@@ -47,11 +40,8 @@ button:hover{background:#218838;}
 <div class="card">
 <h3>🔔 <span id="notify">0</span></h3>
 <div id="reports"></div>
-<h3>📊 Analytics</h3>
 <canvas id="chart"></canvas>
-<h3>📍 Heatmap</h3>
 <div id="map"></div>
-<h3>🧠 AI Prediction</h3>
 <div id="ai"></div>
 </div>
 </div>
@@ -62,8 +52,13 @@ button:hover{background:#218838;}
 import { db, auth, collection, onSnapshot } from "./firebase.js";
 import { signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
-const popup=document.getElementById("popup");
 const loginBtn=document.getElementById("loginBtn");
+const loginBox=document.getElementById("loginBox");
+const policeDash=document.getElementById("policeDash");
+const reportsDiv=document.getElementById("reports");
+const notify=document.getElementById("notify");
+const aiDiv=document.getElementById("ai");
+
 let allReports=[];
 let map,chart;
 
@@ -72,8 +67,10 @@ loginBtn.onclick=async()=>{
   const email=document.getElementById("email").value;
   const password=document.getElementById("password").value;
   await signInWithEmailAndPassword(auth,email,password);
+
   loginBox.style.display="none";
   policeDash.classList.remove("hidden");
+
   initMap();
   realtime();
  }catch(e){alert(e.message)}
@@ -81,9 +78,6 @@ loginBtn.onclick=async()=>{
 
 function realtime(){
  onSnapshot(collection(db,"reports"),(snap)=>{
-  popup.style.display="block";
-  setTimeout(()=>popup.style.display="none",3000);
-
   allReports=[];
   snap.forEach(doc=>allReports.push(doc.data()));
   notify.innerText=snap.size;
@@ -97,16 +91,11 @@ function initMap(){
 }
 
 function render(){
- reports.innerHTML="";
+ reportsDiv.innerHTML="";
  let zones={};
 
  allReports.forEach((d,i)=>{
-  // FULL VIEW BUTTON
-  reports.innerHTML+=`
-  <div class='report-item' onclick='viewReport(${i})'>
-    📍 ${d.region||"-"} - ${d.zone||"-"} - ${d.crime||"-"}
-  </div>`;
-
+  reportsDiv.innerHTML+=`<div class='report-item' onclick='viewReport(${i})'>${d.zone||"-"} - ${d.crime||"-"}</div>`;
   zones[d.zone]=(zones[d.zone]||0)+1;
 
   if(d.lat && d.lng){
@@ -119,63 +108,21 @@ function render(){
  aiPrediction(zones);
 }
 
-// 🔍 FULL REPORT VIEW
 window.viewReport=function(i){
  const d = allReports[i];
-
- const html = `
- <h2>📄 ዝርዝር ሪፖርት</h2>
- <p><b>ክልል:</b> ${d.region||"-"}</p>
- <p><b>ዞን:</b> ${d.zone||"-"}</p>
- <p><b>ወረዳ:</b> ${d.wereda||"-"}</p>
- <p><b>ጣቢያ:</b> ${d.station||"-"}</p>
- <p><b>ወንጀል:</b> ${d.crime||"-"}</p>
- <p><b>መግለጫ:</b> ${d.desc||"-"}</p>
- <p><b>ቀን:</b> ${d.date||"-"}</p>
- `;
-
  const w = window.open("");
- w.document.write(html + `
- <br><br>
- <button onclick="window.print()">🖨 Print</button>
- <button onclick="downloadPDF()">📥 PDF</button>
- <button onclick="editReport()">✏ Edit</button>
+ w.document.write(`
+ <h2>📄 ሙሉ ሪፖርት</h2>
+ <p>ክልል: ${d.region||"-"}</p>
+ <p>ዞን: ${d.zone||"-"}</p>
+ <p>ወረዳ: ${d.wereda||"-"}</p>
+ <p>ጣቢያ: ${d.station||"-"}</p>
+ <p>ወንጀል: ${d.crime||"-"}</p>
+ <p>መግለጫ: ${d.desc||"-"}</p>
+ <p>ቀን: ${d.date||"-"}</p>
+ <button onclick="window.print()">Print</button>
  `);
-
- // PDF DOWNLOAD
- w.downloadPDF = function(){
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF();
-  doc.text(html.replace(/<[^>]+>/g, ''),10,10);
-  doc.save("report.pdf");
- }
-
- // EDIT (simple prompt edit)
- w.editReport = function(){
-  const newCrime = prompt("Edit Crime", d.crime);
-  if(newCrime){
-    d.crime = newCrime;
-    alert("Updated locally (connect updateDoc for DB)");
-  }
- }
 };
- let timeline={};
-
- allReports.forEach((d,i)=>{
-  reports.innerHTML+=`<div class='report-item'>${d.zone}-${d.crime}</div>`;
-
-  zones[d.zone]=(zones[d.zone]||0)+1;
-  timeline[i]=zones[d.zone];
-
-  if(d.lat && d.lng){
-   let color = zones[d.zone]>2 ? "red" : "blue";
-   L.circle([d.lat,d.lng],{color}).addTo(map);
-  }
- });
-
- drawChart(zones);
- aiPrediction(timeline);
-}
 
 function drawChart(z){
  if(chart) chart.destroy();
@@ -185,20 +132,10 @@ function drawChart(z){
  });
 }
 
-// 🔥 REAL AI (Simple ML Prediction)
-function aiPrediction(data){
- let values=Object.values(data);
- if(values.length<2){ai.innerHTML="No data";return}
-
- let trend = values[values.length-1] - values[0];
- let prediction = values[values.length-1] + trend;
-
- ai.innerHTML=`📈 Trend: ${trend}<br>🔮 Next Prediction: ${prediction}`;
-}
-
-// 📱 PWA Service Worker
-if('serviceWorker' in navigator){
- navigator.serviceWorker.register('sw.js');
+function aiPrediction(z){
+ let max=0,hot="";
+ for(let k in z){if(z[k]>max){max=z[k];hot=k}}
+ aiDiv.innerHTML=`🔥 hotspot: ${hot}`;
 }
 
 </script>
