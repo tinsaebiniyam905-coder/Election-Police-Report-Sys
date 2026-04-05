@@ -99,6 +99,66 @@ function initMap(){
 function render(){
  reports.innerHTML="";
  let zones={};
+
+ allReports.forEach((d,i)=>{
+  // FULL VIEW BUTTON
+  reports.innerHTML+=`
+  <div class='report-item' onclick='viewReport(${i})'>
+    📍 ${d.region||"-"} - ${d.zone||"-"} - ${d.crime||"-"}
+  </div>`;
+
+  zones[d.zone]=(zones[d.zone]||0)+1;
+
+  if(d.lat && d.lng){
+   let color = zones[d.zone]>2 ? "red" : "blue";
+   L.circle([d.lat,d.lng],{color}).addTo(map);
+  }
+ });
+
+ drawChart(zones);
+ aiPrediction(zones);
+}
+
+// 🔍 FULL REPORT VIEW
+window.viewReport=function(i){
+ const d = allReports[i];
+
+ const html = `
+ <h2>📄 ዝርዝር ሪፖርት</h2>
+ <p><b>ክልል:</b> ${d.region||"-"}</p>
+ <p><b>ዞን:</b> ${d.zone||"-"}</p>
+ <p><b>ወረዳ:</b> ${d.wereda||"-"}</p>
+ <p><b>ጣቢያ:</b> ${d.station||"-"}</p>
+ <p><b>ወንጀል:</b> ${d.crime||"-"}</p>
+ <p><b>መግለጫ:</b> ${d.desc||"-"}</p>
+ <p><b>ቀን:</b> ${d.date||"-"}</p>
+ `;
+
+ const w = window.open("");
+ w.document.write(html + `
+ <br><br>
+ <button onclick="window.print()">🖨 Print</button>
+ <button onclick="downloadPDF()">📥 PDF</button>
+ <button onclick="editReport()">✏ Edit</button>
+ `);
+
+ // PDF DOWNLOAD
+ w.downloadPDF = function(){
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  doc.text(html.replace(/<[^>]+>/g, ''),10,10);
+  doc.save("report.pdf");
+ }
+
+ // EDIT (simple prompt edit)
+ w.editReport = function(){
+  const newCrime = prompt("Edit Crime", d.crime);
+  if(newCrime){
+    d.crime = newCrime;
+    alert("Updated locally (connect updateDoc for DB)");
+  }
+ }
+};
  let timeline={};
 
  allReports.forEach((d,i)=>{
