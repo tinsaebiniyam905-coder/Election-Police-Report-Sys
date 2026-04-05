@@ -2,7 +2,7 @@
 <html lang="am">
 <head>
 <meta charset="UTF-8" />
-<title>የምርጫ የፖሊስ ሪፖርት ሲስተም</title>
+<title>የፖሊስ ሪፖርት ሲስተም</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -19,14 +19,14 @@ input,textarea{width:100%;padding:10px;margin:6px 0;border-radius:8px;border:1px
 button{background:#007bff;color:white;padding:10px;border:none;border-radius:8px;cursor:pointer;margin-top:5px;}
 button:hover{background:#0056b3;}
 .hidden{display:none;}
-.report-item{background:#f1f1f1;margin:10px 0;padding:10px;border-radius:10px;}
+.report-item{background:#f1f1f1;margin:10px 0;padding:10px;border-radius:10px;cursor:pointer;}
 #map{height:300px;margin-top:10px;border-radius:10px;}
 </style>
 </head>
 
 <body>
 <div class="container">
-<h2>🇪🇹 የምርጫ የፖሊስ ሪፖርት ሲስተም</h2>
+<h2>🇪🇹 የፖሊስ ሪፖርት ሲስተም</h2>
 
 <div class="card" id="loginBox">
 <input id="email" placeholder="ኢሜይል" />
@@ -34,37 +34,45 @@ button:hover{background:#0056b3;}
 <button id="loginBtn">ግባ</button>
 </div>
 
+<!-- WEREDA -->
 <div id="weredaDash" class="hidden">
 <div class="card">
-<h3>📋 ሪፖርት</h3>
+<h3>📋 ሙሉ ሪፖርት ፎርም</h3>
 <input id="region" placeholder="ክልል" />
 <input id="zone" placeholder="ዞን" />
 <input id="wereda" placeholder="ወረዳ" />
-<input id="Election station" placeholder="ምርጫ ጣቢያ" />
-<input id="crime" placeholder="ወንጀል" />
+<input id="station" placeholder="የምርጫ ጣቢያ" />
+<input id="crime" placeholder="የወንጀል አይነት" />
 <input id="weapon" placeholder="የተፈፀመበት መሳሪያ" />
-<input id="suspects count" placeholder="ተጠርጣሪ ብዛት" />
-<input id="suspects catch or not" placeholder="ተጠርጣሪዎች ተይዘዋል/አልተያዙም" />
-<input id="General short description" placeholder="አጠቀላይ አጭር መግልጫ" />
-<input id="Name of the police officer who filed the report" placeholder="ሪፖርቱን የሰራ ፖሊስ ስም" />  
+<input id="suspects" placeholder="ተጠርጣሪ ብዛት" />
+<input id="arrested" placeholder="ተጠርጣሪዎች ተይዘዋል/አልተያዙም" />
+<input id="light" placeholder="ቀላል ጉዳት" />
+<input id="serious" placeholder="ከባድ ጉዳት" />
+<input id="property" placeholder="የንብረት ጉዳት" />
+<input id="exhibit" placeholder="የተያዘ ኤግዝቢት" />
+<textarea id="desc" placeholder="አጭር መግለጫ"></textarea>
+<input id="date" type="datetime-local" />
+<input id="officer" placeholder="ፖሊስ ስም" />
 <input id="lat" placeholder="Latitude" />
 <input id="lng" placeholder="Longitude" />
-<input id="date" type="datetime-local" />
 <button id="submitBtn">ላክ</button>
+</div>
+
+<div class="card">
+<h3>📂 የላኩት ሪፖርቶች</h3>
+<div id="myReports"></div>
 </div>
 </div>
 
+<!-- POLICE -->
 <div id="policeDash" class="hidden">
 <div class="card">
-<h3>🔔 Real-time Notification: <span id="notify">0</span></h3>
-<input id="filterZone" placeholder="Filter በዞን ስም ወይም ወረዳ" />
+<h3>🔔 Notification: <span id="notify">0</span></h3>
+<input id="filterZone" placeholder="Filter በዞን" />
 <input id="filterDate" type="date" />
 <button onclick="renderReports()">Filter</button>
-<button onclick="exportword()">📥 word Export</button> 
-<button onclick="exportExcel()">📥 Excel Export</button>
+<button onclick="exportExcel()">📥 Excel</button>
 <div id="reports"></div>
-<h3>📊 Chart</h3>
-<canvas id="chart"></canvas>
 <h3>📍 Map</h3>
 <div id="map"></div>
 <h3>🧠 AI</h3>
@@ -88,6 +96,7 @@ const reports = document.getElementById("reports");
 const filterZone = document.getElementById("filterZone");
 const filterDate = document.getElementById("filterDate");
 const ai = document.getElementById("ai");
+const myReports = document.getElementById("myReports");
 
 let allReports = [];
 let map;
@@ -99,11 +108,11 @@ loginBtn.onclick = async () => {
 
   try {
     await signInWithEmailAndPassword(auth, email, password);
-
     loginBox.style.display = "none";
 
     if(email.includes("wereda")){
       weredaDash.classList.remove("hidden");
+      loadMyReports();
     } else {
       policeDash.classList.remove("hidden");
       initMap();
@@ -120,16 +129,40 @@ function initMap(){
 }
 
 submitBtn.onclick = async () => {
-  await addDoc(collection(db, "reports"), {
+  const data = {
     region: region.value,
     zone: zone.value,
+    wereda: wereda.value,
+    station: station.value,
     crime: crime.value,
+    weapon: weapon.value,
+    suspects: suspects.value,
+    arrested: arrested.value,
+    light: light.value,
+    serious: serious.value,
+    property: property.value,
+    exhibit: exhibit.value,
+    desc: desc.value,
     date: date.value,
+    officer: officer.value,
     lat: parseFloat(lat.value),
-    lng: parseFloat(lng.value)
-  });
-  alert("✅ ተልኳል");
+    lng: parseFloat(lng.value),
+    status: "sent"
+  };
+
+  await addDoc(collection(db, "reports"), data);
+  alert("✅ ሪፖርት ተልኳል!");
 };
+
+function loadMyReports(){
+  onSnapshot(collection(db,"reports"),(snap)=>{
+    myReports.innerHTML="";
+    snap.forEach(doc=>{
+      const d=doc.data();
+      myReports.innerHTML+=`<div class='report-item'>${d.region}-${d.zone}-${d.crime} ✔</div>`;
+    });
+  });
+}
 
 function startRealtime(){
   onSnapshot(collection(db,"reports"),(snapshot)=>{
@@ -145,24 +178,38 @@ window.renderReports = function(){
   if(map){markers.forEach(m=>map.removeLayer(m));}
   markers=[];
 
-  let zones={};
-
   allReports.forEach(data=>{
     if(filterZone.value && data.zone!==filterZone.value) return;
     if(filterDate.value && !data.date?.includes(filterDate.value)) return;
 
-    reports.innerHTML+=`<div class='report-item'>${data.region}-${data.zone}-${data.crime}</div>`;
+    reports.innerHTML+=`<div class='report-item' onclick='viewReport(${JSON.stringify(data)})'>${data.region}-${data.zone}-${data.crime}</div>`;
 
     if(map && data.lat && data.lng){
       let m=L.marker([data.lat,data.lng]).addTo(map);
       markers.push(m);
     }
-
-    zones[data.zone]=(zones[data.zone]||0)+1;
   });
 
   ai.innerHTML = `📊 ጠቅላላ: ${allReports.length}`;
 };
+
+window.viewReport = function(d){
+  const text = `
+ክልል: ${d.region}\nዞን: ${d.zone}\nወረዳ: ${d.wereda}\nጣቢያ: ${d.station}\nወንጀል: ${d.crime}\nመሳሪያ: ${d.weapon}\nተጠርጣሪ: ${d.suspects}\nይዞታ: ${d.arrested}\nመግለጫ: ${d.desc}`;
+  alert(text);
+  downloadPDF(d);
+};
+
+window.downloadPDF=function(d){
+const { jsPDF } = window.jspdf;
+const doc=new jsPDF();
+doc.text(`Police Report`,10,10);
+doc.text(`Region: ${d.region}`,10,20);
+doc.text(`Zone: ${d.zone}`,10,30);
+doc.text(`Crime: ${d.crime}`,10,40);
+doc.text(`Description: ${d.desc}`,10,50);
+doc.save("report.pdf");
+}
 
 window.exportExcel = function(){
   const ws = XLSX.utils.json_to_sheet(allReports);
