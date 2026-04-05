@@ -34,7 +34,6 @@ button:hover{background:#0056b3;}
 <button id="loginBtn">ግባ</button>
 </div>
 
-<!-- WEREDA -->
 <div id="weredaDash" class="hidden">
 <div class="card">
 <h3>📋 ሪፖርት</h3>
@@ -49,25 +48,19 @@ button:hover{background:#0056b3;}
 </div>
 </div>
 
-<!-- POLICE -->
 <div id="policeDash" class="hidden">
 <div class="card">
 <h3>🔔 Real-time Notification: <span id="notify">0</span></h3>
-
 <input id="filterZone" placeholder="Filter በዞን" />
 <input id="filterDate" type="date" />
 <button onclick="renderReports()">Filter</button>
 <button onclick="exportExcel()">📥 Excel Export</button>
-
 <div id="reports"></div>
-
 <h3>📊 Chart</h3>
 <canvas id="chart"></canvas>
-
-<h3>📍 Map (Hotspot)</h3>
+<h3>📍 Map</h3>
 <div id="map"></div>
-
-<h3>🧠 AI Summary</h3>
+<h3>🧠 AI</h3>
 <div id="ai"></div>
 </div>
 </div>
@@ -78,86 +71,97 @@ button:hover{background:#0056b3;}
 import { db, auth, collection, addDoc, onSnapshot } from "./firebase.js";
 import { signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
+const loginBtn = document.getElementById("loginBtn");
+const submitBtn = document.getElementById("submitBtn");
+const loginBox = document.getElementById("loginBox");
+const weredaDash = document.getElementById("weredaDash");
+const policeDash = document.getElementById("policeDash");
+const notify = document.getElementById("notify");
+const reports = document.getElementById("reports");
+const filterZone = document.getElementById("filterZone");
+const filterDate = document.getElementById("filterDate");
+const ai = document.getElementById("ai");
+
 let allReports = [];
-let map = L.map('map').setView([9.03,38.74],6);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+let map;
 let markers=[];
 
-loginBtn.onclick=async()=>{
-const email=document.getElementById("email").value;
-const password=document.getElementById("password").value;
-await signInWithEmailAndPassword(auth,email,password);
-loginBox.style.display="none";
+loginBtn.onclick = async () => {
+  const email = document.getElementById("email").value;
+  const password = document.getElementById("password").value;
 
-if(email.includes("wereda")){
-weredaDash.classList.remove("hidden");
-}else{
-policeDash.classList.remove("hidden");
-startRealtime();
-}
+  try {
+    await signInWithEmailAndPassword(auth, email, password);
+
+    loginBox.style.display = "none";
+
+    if(email.includes("wereda")){
+      weredaDash.classList.remove("hidden");
+    } else {
+      policeDash.classList.remove("hidden");
+      initMap();
+      startRealtime();
+    }
+  } catch (err) {
+    alert("❌ ሎጊን አልተሳካም: " + err.message);
+  }
 };
 
-submitBtn.onclick=async()=>{
-await addDoc(collection(db,"reports"),{
-region:region.value,
-zone:zone.value,
-crime:crime.value,
-date:date.value,
-lat:parseFloat(lat.value),
-lng:parseFloat(lng.value)
-});
-alert("ተልኳል");
+function initMap(){
+  map = L.map('map').setView([9.03,38.74],6);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+}
+
+submitBtn.onclick = async () => {
+  await addDoc(collection(db, "reports"), {
+    region: region.value,
+    zone: zone.value,
+    crime: crime.value,
+    date: date.value,
+    lat: parseFloat(lat.value),
+    lng: parseFloat(lng.value)
+  });
+  alert("✅ ተልኳል");
 };
 
 function startRealtime(){
-onSnapshot(collection(db,"reports"),(snapshot)=>{
-allReports=[];
-snapshot.forEach(doc=>allReports.push(doc.data()));
-notify.innerText = snapshot.size;
-renderReports();
-});
+  onSnapshot(collection(db,"reports"),(snapshot)=>{
+    allReports=[];
+    snapshot.forEach(doc=>allReports.push(doc.data()));
+    notify.innerText = snapshot.size;
+    renderReports();
+  });
 }
 
-window.renderReports=function(){
-reports.innerHTML="";
-markers.forEach(m=>map.removeLayer(m));
-markers=[];
+window.renderReports = function(){
+  reports.innerHTML="";
+  if(map){markers.forEach(m=>map.removeLayer(m));}
+  markers=[];
 
-let zones={};
-let crimes={};
+  let zones={};
 
-allReports.forEach(data=>{
-if(filterZone.value && data.zone!==filterZone.value) return;
-if(filterDate.value && !data.date?.includes(filterDate.value)) return;
+  allReports.forEach(data=>{
+    if(filterZone.value && data.zone!==filterZone.value) return;
+    if(filterDate.value && !data.date?.includes(filterDate.value)) return;
 
-reports.innerHTML+=`<div class='report-item'>${data.region}-${data.zone}-${data.crime}</div>`;
+    reports.innerHTML+=`<div class='report-item'>${data.region}-${data.zone}-${data.crime}</div>`;
 
-if(data.lat && data.lng){
-let m=L.marker([data.lat,data.lng]).addTo(map);
-m.bindPopup(data.crime);
-markers.push(m);
-}
+    if(map && data.lat && data.lng){
+      let m=L.marker([data.lat,data.lng]).addTo(map);
+      markers.push(m);
+    }
 
-zones[data.zone]=(zones[data.zone]||0)+1;
-crimes[data.crime]=(crimes[data.crime]||0)+1;
-});
+    zones[data.zone]=(zones[data.zone]||0)+1;
+  });
 
-new Chart(document.getElementById("chart"),{
-type:'bar',
-data:{labels:Object.keys(zones),datasets:[{label:'Reports',data:Object.values(zones)}]}
-});
-
-let topZone=null,max=0;
-for(const z in zones){if(zones[z]>max){max=zones[z];topZone=z;}}
-
-ai.innerHTML=`🔥 Hotspot: ${topZone||"-"}`;
+  ai.innerHTML = `📊 ጠቅላላ: ${allReports.length}`;
 };
 
-window.exportExcel=function(){
-const ws = XLSX.utils.json_to_sheet(allReports);
-const wb = XLSX.utils.book_new();
-XLSX.utils.book_append_sheet(wb, ws, "Reports");
-XLSX.writeFile(wb, "reports.xlsx");
+window.exportExcel = function(){
+  const ws = XLSX.utils.json_to_sheet(allReports);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Reports");
+  XLSX.writeFile(wb, "reports.xlsx");
 }
 
 </script>
