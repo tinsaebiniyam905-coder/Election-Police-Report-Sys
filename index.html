@@ -28,7 +28,7 @@
       box-shadow: 0 10px 25px rgba(0,0,0,0.3);
     }
 
-    input, select, textarea {
+    input, textarea {
       width: 100%;
       padding: 10px;
       margin: 8px 0;
@@ -45,10 +45,7 @@
       cursor: pointer;
     }
 
-    button:hover {
-      background: #0056b3;
-    }
-
+    button:hover { background: #0056b3; }
     .hidden { display: none; }
 
     .success {
@@ -79,10 +76,10 @@
     <h3>መግቢያ</h3>
     <input id="email" placeholder="ኢሜይል" />
     <input id="password" type="password" placeholder="ፓስዎርድ" />
-    <button onclick="login()">ግባ</button>
+    <button id="loginBtn">ግባ</button>
   </div>
 
-  <!-- WEREDA DASHBOARD -->
+  <!-- WEREDA -->
   <div id="weredaDash" class="hidden">
     <div class="card">
       <h3>📋 ሪፖርት መሙያ</h3>
@@ -95,22 +92,11 @@
       <input id="crime" placeholder="የወንጀል አይነት" />
       <input id="weapon" placeholder="መሳሪያ" />
 
-      <input id="light" placeholder="ቀላል ጉዳት" />
-      <input id="serious" placeholder="ከባድ ጉዳት" />
-      <input id="deaths" placeholder="ሞት" />
-
-      <input id="male" placeholder="ወንድ" />
-      <input id="female" placeholder="ሴት" />
-
-      <input id="caught" placeholder="ተይዘዋል?" />
-      <input id="count" placeholder="ብዛት" />
-
-      <textarea id="desc" placeholder="አጭር መግለጫ"></textarea>
+      <textarea id="desc" placeholder="መግለጫ"></textarea>
       <input id="date" type="datetime-local" />
       <input id="officer" placeholder="ፖሊስ ስም" />
 
-      <button onclick="submitReport()">ላክ</button>
-
+      <button id="submitBtn">ላክ</button>
       <div id="successMsg" class="success hidden">✅ ሪፖርት ተልኳል</div>
     </div>
 
@@ -120,11 +106,11 @@
     </div>
   </div>
 
-  <!-- POLICE DASHBOARD -->
+  <!-- POLICE -->
   <div id="policeDash" class="hidden">
     <div class="card">
-      <h3>📊 የተላኩ ሪፖርቶች</h3>
-      <button onclick="loadReports()">አድስ ጫን</button>
+      <h3>📊 ሪፖርቶች</h3>
+      <button id="refreshBtn">አድስ</button>
       <div id="reports"></div>
     </div>
   </div>
@@ -135,27 +121,40 @@
 import { db, auth, collection, addDoc, getDocs } from "./firebase.js";
 import { signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
-let role = "";
+const loginBtn = document.getElementById("loginBtn");
+const submitBtn = document.getElementById("submitBtn");
+const refreshBtn = document.getElementById("refreshBtn");
 
-window.login = async function() {
+const loginBox = document.getElementById("loginBox");
+const weredaDash = document.getElementById("weredaDash");
+const policeDash = document.getElementById("policeDash");
+
+const successMsg = document.getElementById("successMsg");
+const myReports = document.getElementById("myReports");
+const reports = document.getElementById("reports");
+
+loginBtn.addEventListener("click", async () => {
   const email = document.getElementById("email").value;
   const password = document.getElementById("password").value;
 
-  await signInWithEmailAndPassword(auth, email, password);
+  try {
+    await signInWithEmailAndPassword(auth, email, password);
 
-  if (email.includes("wereda")) {
-    role = "wereda";
     loginBox.style.display = "none";
-    weredaDash.classList.remove("hidden");
-  } else {
-    role = "police";
-    loginBox.style.display = "none";
-    policeDash.classList.remove("hidden");
-    loadReports();
+
+    if (email.includes("wereda")) {
+      weredaDash.classList.remove("hidden");
+      loadMyReports();
+    } else {
+      policeDash.classList.remove("hidden");
+      loadReports();
+    }
+  } catch (e) {
+    alert("❌ ሎጊን አልተሳካም");
   }
-};
+});
 
-window.submitReport = async function() {
+submitBtn.addEventListener("click", async () => {
   await addDoc(collection(db, "reports"), {
     region: region.value,
     zone: zone.value,
@@ -163,30 +162,36 @@ window.submitReport = async function() {
     station: station.value,
     crime: crime.value,
     weapon: weapon.value,
-    date: date.value
+    description: desc.value,
+    date: date.value,
+    officer: officer.value
   });
 
   successMsg.classList.remove("hidden");
   loadMyReports();
-};
+});
+
+refreshBtn.addEventListener("click", loadReports);
 
 async function loadMyReports() {
   const snapshot = await getDocs(collection(db, "reports"));
   myReports.innerHTML = "";
+
   snapshot.forEach(doc => {
     const d = doc.data();
     myReports.innerHTML += `<div class='report-item'>${d.region} - ${d.crime}</div>`;
   });
 }
 
-window.loadReports = async function() {
+async function loadReports() {
   const snapshot = await getDocs(collection(db, "reports"));
   reports.innerHTML = "";
+
   snapshot.forEach(doc => {
     const d = doc.data();
     reports.innerHTML += `<div class='report-item'>${d.region} | ${d.zone} | ${d.crime}</div>`;
   });
-};
+}
 </script>
 
 </body>
