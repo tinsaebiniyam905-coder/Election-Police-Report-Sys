@@ -5,6 +5,11 @@
 <title>የፖሊስ ሪፖርት ሲስተም</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
+<!-- PWA (Mobile App Like) -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1f4037">
+
+<!-- LIBRARIES -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
@@ -12,70 +17,41 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
 <style>
-body{margin:0;font-family:'Segoe UI';background:linear-gradient(135deg,#0f2027,#203a43,#2c5364);color:white;}
-.container{max-width:1100px;margin:auto;padding:20px;}
-.card{background:white;color:black;border-radius:15px;padding:20px;margin-top:20px;box-shadow:0 10px 25px rgba(0,0,0,0.3);} 
-input,textarea{width:100%;padding:10px;margin:6px 0;border-radius:8px;border:1px solid #ccc;}
-button{background:#007bff;color:white;padding:10px;border:none;border-radius:8px;cursor:pointer;margin-top:5px;}
-button:hover{background:#0056b3;}
-.hidden{display:none;}
-.report-item{background:#f1f1f1;margin:10px 0;padding:10px;border-radius:10px;cursor:pointer;}
-#map{height:300px;margin-top:10px;border-radius:10px;}
+body{margin:0;font-family:'Segoe UI';background:linear-gradient(135deg,#1f4037,#99f2c8);} 
+.container{max-width:1100px;margin:auto;padding:20px;} 
+.card{background:white;border-radius:15px;padding:20px;margin-top:20px;box-shadow:0 10px 25px rgba(0,0,0,0.2);} 
+input,textarea{width:100%;padding:10px;margin:6px 0;border-radius:8px;border:1px solid #ccc;} 
+button{background:#28a745;color:white;padding:10px;border:none;border-radius:8px;cursor:pointer;} 
+button:hover{background:#218838;} 
+.hidden{display:none;} 
+.report-item{background:#f1f1f1;margin:10px 0;padding:10px;border-radius:10px;cursor:pointer;} 
+#map{height:300px;margin-top:10px;border-radius:10px;} 
+.popup{position:fixed;top:20px;right:20px;background:#ff4444;color:white;padding:15px;border-radius:10px;display:none;} 
 </style>
 </head>
 
 <body>
+<div class="popup" id="popup">🔔 አዲስ ሪፖርት!</div>
+
 <div class="container">
 <h2>🇪🇹 የፖሊስ ሪፖርት ሲስተም</h2>
+<h4 style="color:gold;font-weight:bold;">ቤንሻንጉል ጉምዝ ክልል ፖሊስ ኮሚሽን</h4>
 
 <div class="card" id="loginBox">
-<input id="email" placeholder="ኢሜይል" />
-<input id="password" type="password" placeholder="ፓስዎርድ" />
-<button id="loginBtn">ግባ</button>
+<input id="email" placeholder="email" />
+<input id="password" type="password" placeholder="password" />
+<button id="loginBtn">Login</button>
 </div>
 
-<!-- WEREDA -->
-<div id="weredaDash" class="hidden">
-<div class="card">
-<h3>📋 ሙሉ ሪፖርት ፎርም</h3>
-<input id="region" placeholder="ክልል" />
-<input id="zone" placeholder="ዞን" />
-<input id="wereda" placeholder="ወረዳ" />
-<input id="station" placeholder="የምርጫ ጣቢያ" />
-<input id="crime" placeholder="የወንጀል አይነት" />
-<input id="weapon" placeholder="የተፈፀመበት መሳሪያ" />
-<input id="suspects" placeholder="ተጠርጣሪ ብዛት" />
-<input id="arrested" placeholder="ተጠርጣሪዎች ተይዘዋል/አልተያዙም" />
-<input id="light" placeholder="ቀላል ጉዳት" />
-<input id="serious" placeholder="ከባድ ጉዳት" />
-<input id="property" placeholder="የንብረት ጉዳት" />
-<input id="exhibit" placeholder="የተያዘ ኤግዝቢት" />
-<textarea id="desc" placeholder="አጭር መግለጫ"></textarea>
-<input id="date" type="datetime-local" />
-<input id="officer" placeholder="ፖሊስ ስም" />
-<input id="lat" placeholder="Latitude" />
-<input id="lng" placeholder="Longitude" />
-<button id="submitBtn">ላክ</button>
-</div>
-
-<div class="card">
-<h3>📂 የላኩት ሪፖርቶች</h3>
-<div id="myReports"></div>
-</div>
-</div>
-
-<!-- POLICE -->
 <div id="policeDash" class="hidden">
 <div class="card">
-<h3>🔔 Notification: <span id="notify">0</span></h3>
-<input id="filterZone" placeholder="Filter በዞን" />
-<input id="filterDate" type="date" />
-<button onclick="renderReports()">Filter</button>
-<button onclick="exportExcel()">📥 Excel</button>
+<h3>🔔 <span id="notify">0</span></h3>
 <div id="reports"></div>
-<h3>📍 Map</h3>
+<h3>📊 Analytics</h3>
+<canvas id="chart"></canvas>
+<h3>📍 Heatmap</h3>
 <div id="map"></div>
-<h3>🧠 AI</h3>
+<h3>🧠 AI Prediction</h3>
 <div id="ai"></div>
 </div>
 </div>
@@ -83,139 +59,86 @@ button:hover{background:#0056b3;}
 </div>
 
 <script type="module">
-import { db, auth, collection, addDoc, onSnapshot } from "./firebase.js";
+import { db, auth, collection, onSnapshot } from "./firebase.js";
 import { signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
-const loginBtn = document.getElementById("loginBtn");
-const submitBtn = document.getElementById("submitBtn");
-const loginBox = document.getElementById("loginBox");
-const weredaDash = document.getElementById("weredaDash");
-const policeDash = document.getElementById("policeDash");
-const notify = document.getElementById("notify");
-const reports = document.getElementById("reports");
-const filterZone = document.getElementById("filterZone");
-const filterDate = document.getElementById("filterDate");
-const ai = document.getElementById("ai");
-const myReports = document.getElementById("myReports");
+const popup=document.getElementById("popup");
+const loginBtn=document.getElementById("loginBtn");
+let allReports=[];
+let map,chart;
 
-let allReports = [];
-let map;
-let markers=[];
-
-loginBtn.onclick = async () => {
-  const email = document.getElementById("email").value;
-  const password = document.getElementById("password").value;
-
-  try {
-    await signInWithEmailAndPassword(auth, email, password);
-    loginBox.style.display = "none";
-
-    if(email.includes("wereda")){
-      weredaDash.classList.remove("hidden");
-      loadMyReports();
-    } else {
-      policeDash.classList.remove("hidden");
-      initMap();
-      startRealtime();
-    }
-  } catch (err) {
-    alert("❌ ሎጊን አልተሳካም: " + err.message);
-  }
+loginBtn.onclick=async()=>{
+ try{
+  const email=document.getElementById("email").value;
+  const password=document.getElementById("password").value;
+  await signInWithEmailAndPassword(auth,email,password);
+  loginBox.style.display="none";
+  policeDash.classList.remove("hidden");
+  initMap();
+  realtime();
+ }catch(e){alert(e.message)}
 };
+
+function realtime(){
+ onSnapshot(collection(db,"reports"),(snap)=>{
+  popup.style.display="block";
+  setTimeout(()=>popup.style.display="none",3000);
+
+  allReports=[];
+  snap.forEach(doc=>allReports.push(doc.data()));
+  notify.innerText=snap.size;
+  render();
+ });
+}
 
 function initMap(){
-  map = L.map('map').setView([9.03,38.74],6);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+ map=L.map('map').setView([9,38],6);
+ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 }
 
-submitBtn.onclick = async () => {
-  const data = {
-    region: region.value,
-    zone: zone.value,
-    wereda: wereda.value,
-    station: station.value,
-    crime: crime.value,
-    weapon: weapon.value,
-    suspects: suspects.value,
-    arrested: arrested.value,
-    light: light.value,
-    serious: serious.value,
-    property: property.value,
-    exhibit: exhibit.value,
-    desc: desc.value,
-    date: date.value,
-    officer: officer.value,
-    lat: parseFloat(lat.value),
-    lng: parseFloat(lng.value),
-    status: "sent"
-  };
+function render(){
+ reports.innerHTML="";
+ let zones={};
+ let timeline={};
 
-  await addDoc(collection(db, "reports"), data);
-  alert("✅ ሪፖርት ተልኳል!");
-};
+ allReports.forEach((d,i)=>{
+  reports.innerHTML+=`<div class='report-item'>${d.zone}-${d.crime}</div>`;
 
-function loadMyReports(){
-  onSnapshot(collection(db,"reports"),(snap)=>{
-    myReports.innerHTML="";
-    snap.forEach(doc=>{
-      const d=doc.data();
-      myReports.innerHTML+=`<div class='report-item'>${d.region}-${d.zone}-${d.crime} ✔</div>`;
-    });
-  });
+  zones[d.zone]=(zones[d.zone]||0)+1;
+  timeline[i]=zones[d.zone];
+
+  if(d.lat && d.lng){
+   let color = zones[d.zone]>2 ? "red" : "blue";
+   L.circle([d.lat,d.lng],{color}).addTo(map);
+  }
+ });
+
+ drawChart(zones);
+ aiPrediction(timeline);
 }
 
-function startRealtime(){
-  onSnapshot(collection(db,"reports"),(snapshot)=>{
-    allReports=[];
-    snapshot.forEach(doc=>allReports.push(doc.data()));
-    notify.innerText = snapshot.size;
-    renderReports();
-  });
+function drawChart(z){
+ if(chart) chart.destroy();
+ chart=new Chart(document.getElementById("chart"),{
+  type:'bar',
+  data:{labels:Object.keys(z),datasets:[{data:Object.values(z)}]}
+ });
 }
 
-window.renderReports = function(){
-  reports.innerHTML="";
-  if(map){markers.forEach(m=>map.removeLayer(m));}
-  markers=[];
+// 🔥 REAL AI (Simple ML Prediction)
+function aiPrediction(data){
+ let values=Object.values(data);
+ if(values.length<2){ai.innerHTML="No data";return}
 
-  allReports.forEach(data=>{
-    if(filterZone.value && data.zone!==filterZone.value) return;
-    if(filterDate.value && !data.date?.includes(filterDate.value)) return;
+ let trend = values[values.length-1] - values[0];
+ let prediction = values[values.length-1] + trend;
 
-    reports.innerHTML+=`<div class='report-item' onclick='viewReport(${JSON.stringify(data)})'>${data.region}-${data.zone}-${data.crime}</div>`;
-
-    if(map && data.lat && data.lng){
-      let m=L.marker([data.lat,data.lng]).addTo(map);
-      markers.push(m);
-    }
-  });
-
-  ai.innerHTML = `📊 ጠቅላላ: ${allReports.length}`;
-};
-
-window.viewReport = function(d){
-  const text = `
-ክልል: ${d.region}\nዞን: ${d.zone}\nወረዳ: ${d.wereda}\nጣቢያ: ${d.station}\nወንጀል: ${d.crime}\nመሳሪያ: ${d.weapon}\nተጠርጣሪ: ${d.suspects}\nይዞታ: ${d.arrested}\nመግለጫ: ${d.desc}`;
-  alert(text);
-  downloadPDF(d);
-};
-
-window.downloadPDF=function(d){
-const { jsPDF } = window.jspdf;
-const doc=new jsPDF();
-doc.text(`Police Report`,10,10);
-doc.text(`Region: ${d.region}`,10,20);
-doc.text(`Zone: ${d.zone}`,10,30);
-doc.text(`Crime: ${d.crime}`,10,40);
-doc.text(`Description: ${d.desc}`,10,50);
-doc.save("report.pdf");
+ ai.innerHTML=`📈 Trend: ${trend}<br>🔮 Next Prediction: ${prediction}`;
 }
 
-window.exportExcel = function(){
-  const ws = XLSX.utils.json_to_sheet(allReports);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Reports");
-  XLSX.writeFile(wb, "reports.xlsx");
+// 📱 PWA Service Worker
+if('serviceWorker' in navigator){
+ navigator.serviceWorker.register('sw.js');
 }
 
 </script>
