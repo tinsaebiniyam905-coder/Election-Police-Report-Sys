@@ -5,8 +5,6 @@
 <title>የፖሊስ ሪፖርት ሲስተም</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-<!-- FIX: removed manifest (404 error) -->
-
 <!-- LIBRARIES -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -17,7 +15,7 @@
 body{margin:0;font-family:'Segoe UI';background:linear-gradient(135deg,#1f4037,#99f2c8);} 
 .container{max-width:1100px;margin:auto;padding:20px;} 
 .card{background:white;border-radius:15px;padding:20px;margin-top:20px;box-shadow:0 10px 25px rgba(0,0,0,0.2);} 
-input{width:100%;padding:10px;margin:6px 0;border-radius:8px;border:1px solid #ccc;} 
+input,textarea{width:100%;padding:10px;margin:6px 0;border-radius:8px;border:1px solid #ccc;} 
 button{background:#28a745;color:white;padding:10px;border:none;border-radius:8px;cursor:pointer;} 
 .hidden{display:none;} 
 .report-item{background:#f1f1f1;margin:10px 0;padding:10px;border-radius:10px;cursor:pointer;} 
@@ -30,12 +28,34 @@ button{background:#28a745;color:white;padding:10px;border:none;border-radius:8px
 <h2>🇪🇹 የፖሊስ ሪፖርት ሲስተም</h2>
 <h4 style="color:gold;font-weight:bold;">ቤንሻንጉል ጉምዝ ክልል ፖሊስ ኮሚሽን</h4>
 
+<!-- LOGIN -->
 <div class="card" id="loginBox">
 <input id="email" placeholder="email" />
 <input id="password" type="password" placeholder="password" />
 <button id="loginBtn">Login</button>
 </div>
 
+<!-- WEREDA DASHBOARD -->
+<div id="weredaDash" class="hidden">
+<div class="card">
+<h3>📋 ሪፖርት ፎርም</h3>
+<input id="region" placeholder="ክልል" />
+<input id="zone" placeholder="ዞን" />
+<input id="wereda" placeholder="ወረዳ" />
+<input id="station" placeholder="ጣቢያ" />
+<input id="crime" placeholder="ወንጀል" />
+<textarea id="desc" placeholder="መግለጫ"></textarea>
+<input id="date" type="datetime-local" />
+<button id="sendBtn">📤 ላክ</button>
+</div>
+
+<div class="card">
+<h3>📂 የላኩት ሪፖርቶች</h3>
+<div id="myReports"></div>
+</div>
+</div>
+
+<!-- POLICE DASHBOARD -->
 <div id="policeDash" class="hidden">
 <div class="card">
 <h3>🔔 <span id="notify">0</span></h3>
@@ -49,19 +69,23 @@ button{background:#28a745;color:white;padding:10px;border:none;border-radius:8px
 </div>
 
 <script type="module">
-import { db, auth, collection, onSnapshot } from "./firebase.js";
+import { db, auth, collection, addDoc, onSnapshot } from "./firebase.js";
 import { signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
 const loginBtn=document.getElementById("loginBtn");
 const loginBox=document.getElementById("loginBox");
+const weredaDash=document.getElementById("weredaDash");
 const policeDash=document.getElementById("policeDash");
 const reportsDiv=document.getElementById("reports");
 const notify=document.getElementById("notify");
 const aiDiv=document.getElementById("ai");
+const myReports=document.getElementById("myReports");
+const sendBtn=document.getElementById("sendBtn");
 
 let allReports=[];
 let map,chart;
 
+// 🔐 LOGIN ROLE BASED
 loginBtn.onclick=async()=>{
  try{
   const email=document.getElementById("email").value;
@@ -69,13 +93,48 @@ loginBtn.onclick=async()=>{
   await signInWithEmailAndPassword(auth,email,password);
 
   loginBox.style.display="none";
-  policeDash.classList.remove("hidden");
 
-  initMap();
-  realtime();
+  // ✅ ROLE SWITCH
+  if(email.includes("wereda")){
+    weredaDash.classList.remove("hidden");
+    loadMyReports();
+  }else{
+    policeDash.classList.remove("hidden");
+    initMap();
+    realtime();
+  }
+
  }catch(e){alert(e.message)}
 };
 
+// 📤 SEND REPORT
+sendBtn.onclick=async()=>{
+ const data={
+  region:region.value||"-",
+  zone:zone.value||"-",
+  wereda:wereda.value||"-",
+  station:station.value||"-",
+  crime:crime.value||"-",
+  desc:desc.value||"-",
+  date:date.value||"-",
+ };
+
+ await addDoc(collection(db,"reports"),data);
+ alert("✅ ተልኳል");
+};
+
+// 📂 WEREDA VIEW OWN REPORTS
+function loadMyReports(){
+ onSnapshot(collection(db,"reports"),(snap)=>{
+  myReports.innerHTML="";
+  snap.forEach(doc=>{
+   const d=doc.data();
+   myReports.innerHTML+=`<div class='report-item'>${d.zone}-${d.crime}</div>`;
+  });
+ });
+}
+
+// 📡 POLICE REALTIME
 function realtime(){
  onSnapshot(collection(db,"reports"),(snap)=>{
   allReports=[];
@@ -97,17 +156,13 @@ function render(){
  allReports.forEach((d,i)=>{
   reportsDiv.innerHTML+=`<div class='report-item' onclick='viewReport(${i})'>${d.zone||"-"} - ${d.crime||"-"}</div>`;
   zones[d.zone]=(zones[d.zone]||0)+1;
-
-  if(d.lat && d.lng){
-   let color = zones[d.zone]>2 ? "red" : "blue";
-   L.circle([d.lat,d.lng],{color}).addTo(map);
-  }
  });
 
  drawChart(zones);
  aiPrediction(zones);
 }
 
+// 🔍 FULL REPORT
 window.viewReport=function(i){
  const d = allReports[i];
  const w = window.open("");
@@ -120,7 +175,7 @@ window.viewReport=function(i){
  <p>ወንጀል: ${d.crime||"-"}</p>
  <p>መግለጫ: ${d.desc||"-"}</p>
  <p>ቀን: ${d.date||"-"}</p>
- <button onclick="window.print()">Print</button>
+ <button onclick="window.print()">🖨 Print</button>
  `);
 };
 
