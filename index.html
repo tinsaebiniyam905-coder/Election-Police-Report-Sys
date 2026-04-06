@@ -17,6 +17,7 @@ button{background:#28a745;color:white;padding:10px;border:none;border-radius:8px
 .hidden{display:none;} 
 .report-item{background:#f1f1f1;margin:10px 0;padding:10px;border-radius:10px;cursor:pointer;} 
 .new{background:#ffcccc;border-left:5px solid red;}
+.read{background:#e7f5ff;}
 </style>
 </head>
 
@@ -31,6 +32,7 @@ button{background:#28a745;color:white;padding:10px;border:none;border-radius:8px
 <button id="loginBtn">Login</button>
 </div>
 
+<!-- WEREDA -->
 <div id="weredaDash" class="hidden">
 <div class="card">
 <h3>📋 ሪፖርት ፎርም</h3>
@@ -42,8 +44,14 @@ button{background:#28a745;color:white;padding:10px;border:none;border-radius:8px
 <textarea id="desc" placeholder="መግለጫ"></textarea>
 <button id="sendBtn">📤 ላክ</button>
 </div>
+
+<div class="card">
+<h3>📂 የላኩት ሪፖርቶች (የእርስዎ)</h3>
+<div id="myReports"></div>
+</div>
 </div>
 
+<!-- POLICE -->
 <div id="policeDash" class="hidden">
 <div class="card">
 <h3>🔔 <span id="notify">0</span></h3>
@@ -69,9 +77,11 @@ const notify=document.getElementById("notify");
 const aiDiv=document.getElementById("ai");
 const sendBtn=document.getElementById("sendBtn");
 const logoutBtn=document.getElementById("logoutBtn");
+const myReports=document.getElementById("myReports");
 
 let allReports=[];
-let seenIds=new Set();
+let currentUser=null;
+let readIds=new Set(JSON.parse(localStorage.getItem("readIds")||"[]"));
 
 loginBtn.onclick=async()=>{
  const email=document.getElementById("email").value;
@@ -81,9 +91,13 @@ loginBtn.onclick=async()=>{
 
 onAuthStateChanged(auth,(user)=>{
  if(user){
+  currentUser=user;
   loginBox.style.display="none";
+
+  // ወረዳ user (multiple emails supported)
   if(user.email.includes("wereda")){
     weredaDash.classList.remove("hidden");
+    loadMyReports();
   }else{
     policeDash.classList.remove("hidden");
     realtime();
@@ -96,7 +110,7 @@ logoutBtn.onclick=async()=>{
  location.reload();
 };
 
-// 📤 SEND WITH TIMESTAMP
+// SEND (store user email)
 sendBtn.onclick=async()=>{
  const data={
   region:region.value,
@@ -105,25 +119,49 @@ sendBtn.onclick=async()=>{
   station:station.value,
   crime:crime.value,
   desc:desc.value,
+  reporterEmail:currentUser.email,
   createdAt:new Date().toISOString()
  };
  await addDoc(collection(db,"reports"),data);
  alert("✅ ተልኳል");
 };
 
-// 📡 REALTIME + GROUPING
+// WEREDA → ONLY OWN FILES
+function loadMyReports(){
+ onSnapshot(collection(db,"reports"),(snap)=>{
+  let list=[];
+  snap.forEach(doc=>{
+    const d={id:doc.id,...doc.data()};
+    if(d.reporterEmail===currentUser.email){
+      list.push(d);
+    }
+  });
+
+  list.sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
+
+  myReports.innerHTML="";
+  list.forEach(r=>{
+    myReports.innerHTML+=`<div class='report-item' onclick='viewReport("${r.id}")'>
+      ${r.crime}<br>🕒 ${new Date(r.createdAt).toLocaleString()}
+    </div>`;
+  });
+ });
+}
+
+// POLICE REALTIME (all reports)
 function realtime(){
  onSnapshot(collection(db,"reports"),(snap)=>{
   allReports=[];
-  snap.forEach(doc=>{
-   allReports.push({id:doc.id,...doc.data()});
-  });
+  snap.forEach(doc=>allReports.push({id:doc.id,...doc.data()}));
+
+  allReports.sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
+
   notify.innerText=snap.size;
   render();
  });
 }
 
-// 📂 GROUP BY ZONE → WEREDA
+// GROUP + NEW/READ
 function render(){
  reportsDiv.innerHTML="";
  let grouped={};
@@ -140,24 +178,26 @@ function render(){
     reportsDiv.innerHTML+=`<h4>📂 ${w}</h4>`;
 
     grouped[zone][w].forEach(r=>{
-      let isNew=!seenIds.has(r.id);
-      seenIds.add(r.id);
+      let isNew=!readIds.has(r.id);
 
       reportsDiv.innerHTML+=`
-      <div class='report-item ${isNew?"new":""}' onclick='viewReport("${r.id}")'>
-        ${r.crime} <br>
+      <div class='report-item ${isNew?"new":"read"}' onclick='viewReport("${r.id}")'>
+        ${r.crime}<br>
         🕒 ${new Date(r.createdAt).toLocaleString()}
-        ${isNew?"<b style='color:red'> NEW</b>":""}
+        ${isNew?"<b style='color:red'> NEW</b>":"✔ ታይቷል"}
       </div>`;
     });
   }
  }
-
  analyze();
 }
 
+// VIEW → MARK AS READ
 window.viewReport=function(id){
  const r=allReports.find(x=>x.id===id);
+ readIds.add(id);
+ localStorage.setItem("readIds",JSON.stringify([...readIds]));
+
  const w=window.open();
  w.document.write(`
  <h2>📄 ሪፖርት</h2>
@@ -172,6 +212,7 @@ window.viewReport=function(id){
  `);
 };
 
+// AI hotspot
 function analyze(){
  let count={};
  allReports.forEach(r=>count[r.zone]=(count[r.zone]||0)+1);
