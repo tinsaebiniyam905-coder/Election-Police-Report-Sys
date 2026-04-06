@@ -91,6 +91,24 @@ const logoutBtn=document.getElementById("logoutBtn");
 let allReports=[];
 let map,chart;
 
+// 🔑 LOGIN BUTTON (FIXED)
+loginBtn.onclick=async()=>{
+ try{
+  const email=document.getElementById("email").value;
+  const password=document.getElementById("password").value;
+
+  if(!email || !password){
+    alert("እባክዎ email እና password ያስገቡ");
+    return;
+  }
+
+  await signInWithEmailAndPassword(auth,email,password);
+  // onAuthStateChanged will handle redirect
+ }catch(e){
+  alert("Login error: " + e.message);
+ }
+};
+
 // 🔐 AUTO LOGIN (NO REFRESH LOGIN)
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
