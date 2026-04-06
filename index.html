@@ -5,11 +5,8 @@
 <title>የፖሊስ ሪፖርት ሲስተም</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-<!-- LIBRARIES -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
 
 <style>
 body{margin:0;font-family:'Segoe UI';background:linear-gradient(135deg,#1f4037,#99f2c8);} 
@@ -19,7 +16,7 @@ input,textarea{width:100%;padding:10px;margin:6px 0;border-radius:8px;border:1px
 button{background:#28a745;color:white;padding:10px;border:none;border-radius:8px;cursor:pointer;} 
 .hidden{display:none;} 
 .report-item{background:#f1f1f1;margin:10px 0;padding:10px;border-radius:10px;cursor:pointer;} 
-#map{height:300px;margin-top:10px;border-radius:10px;} 
+.new{background:#ffcccc;border-left:5px solid red;}
 </style>
 </head>
 
@@ -28,14 +25,12 @@ button{background:#28a745;color:white;padding:10px;border:none;border-radius:8px
 <h2>🇪🇹 የፖሊስ ሪፖርት ሲስተም</h2>
 <h4 style="color:gold;font-weight:bold;">ቤንሻንጉል ጉምዝ ክልል ፖሊስ ኮሚሽን</h4>
 
-<!-- LOGIN -->
 <div class="card" id="loginBox">
 <input id="email" placeholder="email" />
 <input id="password" type="password" placeholder="password" />
 <button id="loginBtn">Login</button>
 </div>
 
-<!-- WEREDA DASHBOARD -->
 <div id="weredaDash" class="hidden">
 <div class="card">
 <h3>📋 ሪፖርት ፎርም</h3>
@@ -45,37 +40,25 @@ button{background:#28a745;color:white;padding:10px;border:none;border-radius:8px
 <input id="station" placeholder="ጣቢያ" />
 <input id="crime" placeholder="ወንጀል" />
 <textarea id="desc" placeholder="መግለጫ"></textarea>
-<input id="date" type="datetime-local" />
 <button id="sendBtn">📤 ላክ</button>
 </div>
-
-<div class="card">
-<h3>📂 የላኩት ሪፖርቶች</h3>
-<div id="myReports"></div>
-</div>
 </div>
 
-<!-- POLICE DASHBOARD -->
 <div id="policeDash" class="hidden">
 <div class="card">
 <h3>🔔 <span id="notify">0</span></h3>
 <div id="reports"></div>
 <canvas id="chart"></canvas>
-<div id="map"></div>
 <div id="ai"></div>
 </div>
 </div>
 
-<!-- LOGOUT BUTTON -->
-<div style="position:fixed;top:10px;right:10px;">
-<button id="logoutBtn" style="background:red;">Logout</button>
-</div>
-
+<button id="logoutBtn" style="position:fixed;top:10px;right:10px;background:red;">Logout</button>
 </div>
 
 <script type="module">
 import { db, auth, collection, addDoc, onSnapshot } from "./firebase.js";
-import { signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
 const loginBtn=document.getElementById("loginBtn");
 const loginBox=document.getElementById("loginBox");
@@ -84,143 +67,115 @@ const policeDash=document.getElementById("policeDash");
 const reportsDiv=document.getElementById("reports");
 const notify=document.getElementById("notify");
 const aiDiv=document.getElementById("ai");
-const myReports=document.getElementById("myReports");
 const sendBtn=document.getElementById("sendBtn");
 const logoutBtn=document.getElementById("logoutBtn");
 
 let allReports=[];
-let map,chart;
+let seenIds=new Set();
 
-// 🔑 LOGIN BUTTON (FIXED)
 loginBtn.onclick=async()=>{
- try{
-  const email=document.getElementById("email").value;
-  const password=document.getElementById("password").value;
-
-  if(!email || !password){
-    alert("እባክዎ email እና password ያስገቡ");
-    return;
-  }
-
-  await signInWithEmailAndPassword(auth,email,password);
-  // onAuthStateChanged will handle redirect
- }catch(e){
-  alert("Login error: " + e.message);
- }
+ const email=document.getElementById("email").value;
+ const password=document.getElementById("password").value;
+ await signInWithEmailAndPassword(auth,email,password);
 };
-
-// 🔐 AUTO LOGIN (NO REFRESH LOGIN)
-import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
 onAuthStateChanged(auth,(user)=>{
  if(user){
   loginBox.style.display="none";
-
-  const email=user.email;
-
-  if(email.includes("wereda")){
+  if(user.email.includes("wereda")){
     weredaDash.classList.remove("hidden");
-    loadMyReports();
   }else{
     policeDash.classList.remove("hidden");
-    initMap();
     realtime();
   }
- }else{
-  loginBox.style.display="block";
  }
 });
 
-// 🔓 LOGOUT
 logoutBtn.onclick=async()=>{
  await signOut(auth);
  location.reload();
 };
 
-// 📤 SEND REPORT
+// 📤 SEND WITH TIMESTAMP
 sendBtn.onclick=async()=>{
  const data={
-  region:region.value||"-",
-  zone:zone.value||"-",
-  wereda:wereda.value||"-",
-  station:station.value||"-",
-  crime:crime.value||"-",
-  desc:desc.value||"-",
-  date:date.value||"-",
+  region:region.value,
+  zone:zone.value,
+  wereda:wereda.value,
+  station:station.value,
+  crime:crime.value,
+  desc:desc.value,
+  createdAt:new Date().toISOString()
  };
-
  await addDoc(collection(db,"reports"),data);
  alert("✅ ተልኳል");
 };
 
-// 📂 WEREDA VIEW OWN REPORTS
-function loadMyReports(){
- onSnapshot(collection(db,"reports"),(snap)=>{
-  myReports.innerHTML="";
-  snap.forEach(doc=>{
-   const d=doc.data();
-   myReports.innerHTML+=`<div class='report-item'>${d.zone}-${d.crime}</div>`;
-  });
- });
-}
-
-// 📡 POLICE REALTIME
+// 📡 REALTIME + GROUPING
 function realtime(){
  onSnapshot(collection(db,"reports"),(snap)=>{
   allReports=[];
-  snap.forEach(doc=>allReports.push(doc.data()));
+  snap.forEach(doc=>{
+   allReports.push({id:doc.id,...doc.data()});
+  });
   notify.innerText=snap.size;
   render();
  });
 }
 
-function initMap(){
- map=L.map('map').setView([9,38],6);
- L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-}
-
+// 📂 GROUP BY ZONE → WEREDA
 function render(){
  reportsDiv.innerHTML="";
- let zones={};
+ let grouped={};
 
- allReports.forEach((d,i)=>{
-  reportsDiv.innerHTML+=`<div class='report-item' onclick='viewReport(${i})'>${d.zone||"-"} - ${d.crime||"-"}</div>`;
-  zones[d.zone]=(zones[d.zone]||0)+1;
+ allReports.forEach(r=>{
+  if(!grouped[r.zone]) grouped[r.zone]={};
+  if(!grouped[r.zone][r.wereda]) grouped[r.zone][r.wereda]=[];
+  grouped[r.zone][r.wereda].push(r);
  });
 
- drawChart(zones);
- aiPrediction(zones);
+ for(let zone in grouped){
+  reportsDiv.innerHTML+=`<h3>📁 ${zone}</h3>`;
+  for(let w in grouped[zone]){
+    reportsDiv.innerHTML+=`<h4>📂 ${w}</h4>`;
+
+    grouped[zone][w].forEach(r=>{
+      let isNew=!seenIds.has(r.id);
+      seenIds.add(r.id);
+
+      reportsDiv.innerHTML+=`
+      <div class='report-item ${isNew?"new":""}' onclick='viewReport("${r.id}")'>
+        ${r.crime} <br>
+        🕒 ${new Date(r.createdAt).toLocaleString()}
+        ${isNew?"<b style='color:red'> NEW</b>":""}
+      </div>`;
+    });
+  }
+ }
+
+ analyze();
 }
 
-// 🔍 FULL REPORT
-window.viewReport=function(i){
- const d = allReports[i];
- const w = window.open("");
+window.viewReport=function(id){
+ const r=allReports.find(x=>x.id===id);
+ const w=window.open();
  w.document.write(`
- <h2>📄 ሙሉ ሪፖርት</h2>
- <p>ክልል: ${d.region||"-"}</p>
- <p>ዞን: ${d.zone||"-"}</p>
- <p>ወረዳ: ${d.wereda||"-"}</p>
- <p>ጣቢያ: ${d.station||"-"}</p>
- <p>ወንጀል: ${d.crime||"-"}</p>
- <p>መግለጫ: ${d.desc||"-"}</p>
- <p>ቀን: ${d.date||"-"}</p>
- <button onclick="window.print()">🖨 Print</button>
+ <h2>📄 ሪፖርት</h2>
+ <p>${r.region}</p>
+ <p>${r.zone}</p>
+ <p>${r.wereda}</p>
+ <p>${r.station}</p>
+ <p>${r.crime}</p>
+ <p>${r.desc}</p>
+ <p>🕒 ${new Date(r.createdAt).toLocaleString()}</p>
+ <button onclick="window.print()">Print</button>
  `);
 };
 
-function drawChart(z){
- if(chart) chart.destroy();
- chart=new Chart(document.getElementById("chart"),{
-  type:'bar',
-  data:{labels:Object.keys(z),datasets:[{data:Object.values(z)}]}
- });
-}
-
-function aiPrediction(z){
- let max=0,hot="";
- for(let k in z){if(z[k]>max){max=z[k];hot=k}}
- aiDiv.innerHTML=`🔥 hotspot: ${hot}`;
+function analyze(){
+ let count={};
+ allReports.forEach(r=>count[r.zone]=(count[r.zone]||0)+1);
+ aiDiv.innerHTML="🔥 hotspot: "+Object.keys(count).reduce((a,b)=>count[a]>count[b]?a:b,"");
 }
 
 </script>
