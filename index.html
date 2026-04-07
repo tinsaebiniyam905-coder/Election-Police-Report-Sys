@@ -13,8 +13,6 @@ input,textarea{width:100%;padding:10px;margin:6px 0;border-radius:8px;border:1px
 button{background:#28a745;color:white;padding:10px;border:none;border-radius:8px;cursor:pointer;} 
 .hidden{display:none;} 
 .report-item{background:#f1f1f1;margin:10px 0;padding:10px;border-radius:10px;cursor:pointer;} 
-.new{background:#ffcccc;border-left:5px solid red;}
-.read{background:#e7f5ff;}
 </style>
 </head>
 
@@ -29,7 +27,6 @@ button{background:#28a745;color:white;padding:10px;border:none;border-radius:8px
 <button id="loginBtn">Login</button>
 </div>
 
-<!-- WEREDA -->
 <div id="weredaDash" class="hidden">
 <div class="card">
 <h3>📋 ሪፖርት ፎርም</h3>
@@ -41,19 +38,6 @@ button{background:#28a745;color:white;padding:10px;border:none;border-radius:8px
 <textarea id="desc" placeholder="መግለጫ"></textarea>
 <button id="sendBtn">📤 ላክ</button>
 </div>
-
-<div class="card">
-<h3>📂 የላኩት</h3>
-<div id="myReports"></div>
-</div>
-</div>
-
-<!-- POLICE -->
-<div id="policeDash" class="hidden">
-<div class="card">
-<h3>🔔 <span id="notify">0</span></h3>
-<div id="reports"></div>
-</div>
 </div>
 
 <button id="logoutBtn" style="position:fixed;top:10px;right:10px;background:red;">Logout</button>
@@ -62,31 +46,20 @@ button{background:#28a745;color:white;padding:10px;border:none;border-radius:8px
 
 <script type="module">
 
-// ✅ FIXED IMPORTS
 import { db, auth } from "./firebase.js";
-import { 
-  collection, 
-  addDoc, 
-  onSnapshot 
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { collection, addDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
-import { 
-  signInWithEmailAndPassword, 
-  signOut, 
-  onAuthStateChanged 
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+// ✅ FIX (IMPORTANT)
+const emailInput = document.getElementById("email");
+const passwordInput = document.getElementById("password");
 
 const loginBtn=document.getElementById("loginBtn");
 const loginBox=document.getElementById("loginBox");
 const weredaDash=document.getElementById("weredaDash");
-const policeDash=document.getElementById("policeDash");
-const reportsDiv=document.getElementById("reports");
-const notify=document.getElementById("notify");
 const sendBtn=document.getElementById("sendBtn");
 const logoutBtn=document.getElementById("logoutBtn");
-const myReports=document.getElementById("myReports");
 
-let allReports=[];
 let currentUser=null;
 
 // LOGIN
@@ -105,14 +78,7 @@ onAuthStateChanged(auth,(user)=>{
  if(user){
   currentUser=user;
   loginBox.style.display="none";
-
-  if(user.email.includes("wereda")){
-    weredaDash.classList.remove("hidden");
-    loadMyReports();
-  }else{
-    policeDash.classList.remove("hidden");
-    realtime();
-  }
+  weredaDash.classList.remove("hidden");
  }else{
   loginBox.style.display="block";
  }
@@ -139,63 +105,6 @@ sendBtn.onclick=async()=>{
 
  await addDoc(collection(db,"reports"),data);
  alert("✅ ተልኳል");
-};
-
-// WEREDA ONLY OWN REPORTS
-function loadMyReports(){
- onSnapshot(collection(db,"reports"),(snap)=>{
-  myReports.innerHTML="";
-  snap.forEach(doc=>{
-    const r=doc.data();
-    if(r.reporterEmail===currentUser.email){
-      myReports.innerHTML+=`
-      <div class="report-item" onclick="viewReport('${doc.id}')">
-      📄 ${r.crime}
-      </div>`;
-    }
-  });
- });
-}
-
-// POLICE REALTIME
-function realtime(){
- onSnapshot(collection(db,"reports"),(snap)=>{
-  allReports=[];
-  reportsDiv.innerHTML="";
-
-  snap.forEach(doc=>{
-    const r={id:doc.id,...doc.data()};
-    allReports.push(r);
-
-    reportsDiv.innerHTML+=`
-    <div class="report-item" onclick="viewReport('${r.id}')">
-    📄 ${r.crime} - ${r.zone}
-    </div>`;
-  });
-
-  notify.innerText=allReports.length;
- });
-}
-
-// VIEW REPORT
-window.viewReport=function(id){
- const r=allReports.find(x=>x.id===id);
-
- if(!r){
-  alert("❌ not found");
-  return;
- }
-
- const w=window.open();
- w.document.write(`
- <h2>📄 ሪፖርት</h2>
- <p>ክልል: ${r.region||""}</p>
- <p>ዞን: ${r.zone||""}</p>
- <p>ወረዳ: ${r.wereda||""}</p>
- <p>ወንጀል: ${r.crime||""}</p>
- <p>መግለጫ: ${r.desc||""}</p>
- <button onclick="print()">Print</button>
- `);
 };
 
 </script>
